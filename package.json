@@ -1,0 +1,86 @@
+{
+  "name": "p2p-voicechat",
+  "version": "1.0.0",
+  "description": "A stable P2P voice chat application over TCP",
+  "main": "electron-main.cjs",
+  "type": "module",
+  "scripts": {
+    "start": "node app.js",
+    "start:gui": "electron electron-main.cjs",
+    "electron": "electron electron-main.cjs",
+    "build": "electron-builder",
+    "build-win": "electron-builder --win",
+    "build-mac": "electron-builder --mac",
+    "build-linux": "electron-builder --linux",
+    "build-all": "electron-builder --win --mac --linux"
+  },
+  "dependencies": {
+    "node-record-lpcm16": "^1.0.1",
+    "speaker": "^0.5.4"
+  },
+  "devDependencies": {
+    "electron": "^27.3.11",
+    "electron-builder": "^24.6.4"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "author": "",
+  "license": "MIT",
+  "build": {
+    "appId": "com.p2pvoicechat.app",
+    "productName": "P2P Voice Chat",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!**/*.ts",
+      "!node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!node_modules/*.d.ts",
+      "!node_modules/.bin",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
+      "!**/{appveyor.yml,.travis.yml,circle.yml}",
+      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        },
+        {
+          "target": "portable"
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "license": "LICENSE.txt"
+    },
+    "mac": {
+      "category": "public.app-category.utilities",
+      "icon": "build/icon.icns"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility",
+      "icon": "build/icon.png"
+    }
+  }
+}
