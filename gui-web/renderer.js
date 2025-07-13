@@ -24,10 +24,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let audioBufferQueue = [];
     let isPlaying = false;
     let playbackStartTime = 0;
+    let nextPlayTime = 0;
     let sampleRate = 44100;
     let channelCount = 1;
     let bufferDuration = 0.02; // 20ms chunks
-    let maxQueueSize = 50; // Maximum queue size to prevent memory issues
+    let maxQueueSize = 100; // Increased queue size
+    let minQueueSize = 3; // Minimum buffers before starting playback
+    let lastScheduledEndTime = 0;
 
     function addLog(message, type = 'info') {
         const entry = document.createElement('div');
@@ -274,19 +277,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (audioBufferQueue.length < maxQueueSize) {
                     audioBufferQueue.push({
                         data: buffer,
-                        timestamp: audioContext.currentTime
+                        timestamp: audioContext.currentTime,
+                        duration: buffer.length / sampleRate
                     });
                     
-                    // Start playback if not already playing
-                    if (!isPlaying) {
+                    // Start playback only when we have enough buffers
+                    if (!isPlaying && audioBufferQueue.length >= minQueueSize) {
                         startContinuousPlayback();
                     }
                 } else {
-                    // Queue is full, drop oldest buffer
+                    // Queue is full, drop oldest buffer to prevent lag
                     audioBufferQueue.shift();
                     audioBufferQueue.push({
                         data: buffer,
-                        timestamp: audioContext.currentTime
+                        timestamp: audioContext.currentTime,
+                        duration: buffer.length / sampleRate
                     });
                 }
             } catch (err) {
@@ -317,7 +322,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function startContinuousPlayback() {
         if (isPlaying) return;
         isPlaying = true;
-        playbackStartTime = audioContext.currentTime;
+        
+        // Start playback slightly in the future to ensure smooth scheduling
+        const currentTime = audioContext.currentTime;
+        nextPlayTime = currentTime + 0.1; // 100ms delay
+        lastScheduledEndTime = nextPlayTime;
+        
+        addLog(`Starting continuous playback with ${audioBufferQueue.length} buffers`, 'info');
         scheduleNextBuffer();
     }
 
@@ -329,15 +340,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Check if we have buffers to play
         if (audioBufferQueue.length === 0) {
-            // No buffers available, check again in a few milliseconds
+            // No buffers available, wait a bit
             setTimeout(() => {
                 if (audioBufferQueue.length === 0) {
-                    // Still no buffers, stop playback
-                    isPlaying = false;
+                    // Still no buffers, stop playback after a timeout
+                    const timeSinceLastBuffer = audioContext.currentTime - lastScheduledEndTime;
+                    if (timeSinceLastBuffer > 0.5) { // 500ms timeout
+                        isPlaying = false;
+                        addLog('Playback stopped - no buffers', 'info');
+                    } else {
+                        scheduleNextBuffer();
+                    }
                 } else {
                     scheduleNextBuffer();
                 }
-            }, 10);
+            }, 5);
             return;
         }
 
@@ -355,22 +372,36 @@ document.addEventListener('DOMContentLoaded', () => {
             source.buffer = audioBuffer;
             source.connect(audioContext.destination);
 
-            // Calculate when to start this buffer
+            // Use precise timing
             const currentTime = audioContext.currentTime;
-            const scheduleTime = Math.max(currentTime, playbackStartTime);
+            const scheduleTime = Math.max(currentTime + 0.01, nextPlayTime);
             
             source.start(scheduleTime);
             
-            // Update playback start time for next buffer
-            playbackStartTime = scheduleTime + audioBuffer.duration;
+            // Update next play time
+            nextPlayTime = scheduleTime + audioBuffer.duration;
+            lastScheduledEndTime = nextPlayTime;
 
-            // Schedule next buffer immediately
+            // Add crossfade to reduce clicks (simple volume envelope)
+            const gainNode = audioContext.createGain();
+            source.disconnect();
+            source.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            // Very short fade in/out to reduce clicks
+            const fadeTime = 0.002; // 2ms
+            gainNode.gain.setValueAtTime(0, scheduleTime);
+            gainNode.gain.linearRampToValueAtTime(1, scheduleTime + fadeTime);
+            gainNode.gain.setValueAtTime(1, nextPlayTime - fadeTime);
+            gainNode.gain.linearRampToValueAtTime(0, nextPlayTime);
+
+            // Schedule next buffer
             setTimeout(() => scheduleNextBuffer(), 0);
 
         } catch (err) {
             console.error('Error playing buffered audio:', err);
             // Continue with next buffer
-            setTimeout(() => scheduleNextBuffer(), 10);
+            setTimeout(() => scheduleNextBuffer(), 5);
         }
     }
 
@@ -378,6 +409,9 @@ document.addEventListener('DOMContentLoaded', () => {
         isPlaying = false;
         audioBufferQueue = [];
         playbackStartTime = 0;
+        nextPlayTime = 0;
+        lastScheduledEndTime = 0;
+        addLog('Continuous playback stopped', 'info');
     }
 
     function stopAudioProcessing() {
