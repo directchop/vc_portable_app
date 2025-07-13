@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const volumeSlider = document.getElementById('volumeSlider');
     const volumeValue = document.getElementById('volumeValue');
     const protocolSelect = document.getElementById('protocolSelect');
+    const refreshBufferBtn = document.getElementById('refreshBufferBtn');
 
     let socket;
     let audioContext;
@@ -38,6 +39,20 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastScheduledEndTime = 0;
     let isMuted = false;
     let receiveVolume = 1.0; // 0.0 to 2.0
+    
+    // Buffer monitoring and refresh
+    let bufferRefreshInterval = null;
+    let maxLatency = 500; // Max allowed latency in ms
+    let latencyCheckInterval = 1000; // Check every 1 second
+    let bufferStartTime = 0;
+    let totalBuffersReceived = 0;
+    
+    // Adaptive buffer management
+    let adaptiveEnabled = true;
+    let averageLatency = 0;
+    let latencyHistory = [];
+    let latencyHistorySize = 10;
+    let autoRefreshCount = 0;
 
     function addLog(message, type = 'info') {
         const entry = document.createElement('div');
@@ -190,6 +205,15 @@ document.addEventListener('DOMContentLoaded', () => {
         addLog(`Receive volume set to ${volume}%`, 'info');
     });
 
+    // Refresh buffer button event listener
+    refreshBufferBtn.addEventListener('click', () => {
+        if (isConnected) {
+            refreshAudioBuffer();
+        } else {
+            addLog('Not connected - cannot refresh buffer', 'warning');
+        }
+    });
+
     connectBtn.addEventListener('click', async () => {
         if (isConnected) return;
         addLog('Connecting to server...');
@@ -223,6 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
             connectBtn.disabled = true;
             disconnectBtn.disabled = false;
             muteBtn.disabled = false;
+            refreshBufferBtn.disabled = false;
             
             // Send protocol preference if UDP is selected
             if (protocol === 'udp') {
@@ -289,6 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
 
                 startAudioVisualization();
+                startBufferMonitoring();
                 addLog(`Microphone access granted. Using buffer size: ${bufferSize}`, 'info');
 
                 // Set audio output device if supported (not available on iOS)
@@ -318,11 +344,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const buffer = new Float32Array(data);
                 
                 // Add to queue instead of playing immediately
+                totalBuffersReceived++;
+                
                 if (audioBufferQueue.length < maxQueueSize) {
                     audioBufferQueue.push({
                         data: buffer,
                         timestamp: audioContext.currentTime,
-                        duration: buffer.length / sampleRate
+                        duration: buffer.length / sampleRate,
+                        id: totalBuffersReceived
                     });
                     
                     // Start playback only when we have enough buffers
@@ -332,12 +361,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 } else {
                     // Queue is full, drop oldest buffer to prevent lag
-                    audioBufferQueue.shift();
+                    const dropped = audioBufferQueue.shift();
                     audioBufferQueue.push({
                         data: buffer,
                         timestamp: audioContext.currentTime,
-                        duration: buffer.length / sampleRate
+                        duration: buffer.length / sampleRate,
+                        id: totalBuffersReceived
                     });
+                    addLog(`Buffer overflow: dropped buffer ${dropped.id}`, 'warning');
                 }
             } catch (err) {
                 console.error('Error queuing audio:', err);
@@ -461,16 +492,115 @@ document.addEventListener('DOMContentLoaded', () => {
         lastScheduledEndTime = 0;
         addLog('Continuous playback stopped', 'info');
     }
+    
+    function refreshAudioBuffer() {
+        const queueSize = audioBufferQueue.length;
+        addLog(`Buffer refresh: clearing ${queueSize} buffers`, 'info');
+        
+        // Clear buffer queue
+        audioBufferQueue = [];
+        
+        // Reset playback state
+        if (isPlaying) {
+            isPlaying = false;
+            nextPlayTime = 0;
+            lastScheduledEndTime = 0;
+        }
+        
+        // Reset counters
+        totalBuffersReceived = 0;
+        bufferStartTime = audioContext ? audioContext.currentTime : 0;
+        
+        // Reset adaptive management
+        latencyHistory = [];
+        averageLatency = 0;
+        
+        addLog('Audio buffer refreshed', 'success');
+    }
+    
+    function checkBufferLatency() {
+        if (!isPlaying || !audioContext) return;
+        
+        const currentTime = audioContext.currentTime;
+        const estimatedLatency = (audioBufferQueue.length * bufferDuration * 1000); // in ms
+        
+        // Update latency history for adaptive management
+        if (adaptiveEnabled) {
+            latencyHistory.push(estimatedLatency);
+            if (latencyHistory.length > latencyHistorySize) {
+                latencyHistory.shift();
+            }
+            
+            // Calculate average latency
+            averageLatency = latencyHistory.reduce((a, b) => a + b, 0) / latencyHistory.length;
+            
+            // Adaptive max latency adjustment
+            if (autoRefreshCount > 3) {
+                // If we've refreshed too many times, increase tolerance
+                maxLatency = Math.min(800, maxLatency + 50);
+                addLog(`Increased latency tolerance to ${maxLatency}ms`, 'info');
+                autoRefreshCount = 0;
+            } else if (averageLatency < maxLatency * 0.3 && maxLatency > 200) {
+                // If latency is consistently low, we can be more strict
+                maxLatency = Math.max(200, maxLatency - 25);
+                addLog(`Decreased latency tolerance to ${maxLatency}ms`, 'info');
+            }
+        }
+        
+        // Check if latency is too high
+        if (estimatedLatency > maxLatency) {
+            autoRefreshCount++;
+            addLog(`High latency detected: ${Math.round(estimatedLatency)}ms (avg: ${Math.round(averageLatency)}ms), refreshing buffer...`, 'warning');
+            refreshAudioBuffer();
+        }
+        
+        // Auto-refresh if buffer accumulates too much
+        if (audioBufferQueue.length > maxQueueSize * 0.8) {
+            addLog(`Buffer overflow prevention: ${audioBufferQueue.length}/${maxQueueSize}`, 'warning');
+            refreshAudioBuffer();
+        }
+        
+        // Adaptive queue size adjustment
+        if (adaptiveEnabled && latencyHistory.length >= 5) {
+            if (averageLatency > maxLatency * 0.7) {
+                // Reduce minimum queue size for faster response
+                minQueueSize = Math.max(1, minQueueSize - 1);
+            } else if (averageLatency < maxLatency * 0.3) {
+                // Increase minimum queue size for stability
+                minQueueSize = Math.min(5, minQueueSize + 1);
+            }
+        }
+    }
+    
+    function startBufferMonitoring() {
+        if (bufferRefreshInterval) {
+            clearInterval(bufferRefreshInterval);
+        }
+        
+        bufferRefreshInterval = setInterval(checkBufferLatency, latencyCheckInterval);
+        bufferStartTime = audioContext ? audioContext.currentTime : 0;
+        addLog('Buffer monitoring started', 'info');
+    }
+    
+    function stopBufferMonitoring() {
+        if (bufferRefreshInterval) {
+            clearInterval(bufferRefreshInterval);
+            bufferRefreshInterval = null;
+        }
+        addLog('Buffer monitoring stopped', 'info');
+    }
 
     function resetMuteAndVolume() {
         isMuted = false;
         muteBtn.textContent = '🎤 Mute';
         muteBtn.classList.remove('muted');
         muteBtn.disabled = true;
+        refreshBufferBtn.disabled = true;
     }
 
     function stopAudioProcessing() {
         stopContinuousPlayback();
+        stopBufferMonitoring();
         resetMuteAndVolume();
         
         if (mediaStream) {
@@ -509,4 +639,5 @@ document.addEventListener('DOMContentLoaded', () => {
     updateStatus('disconnected', 'Ready');
     disconnectBtn.disabled = true;
     muteBtn.disabled = true;
+    refreshBufferBtn.disabled = true;
 });
