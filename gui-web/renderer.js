@@ -19,6 +19,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let analyser;
     let animationId;
     let isConnected = false;
+    
+    // Audio buffering system
+    let audioBufferQueue = [];
+    let isPlaying = false;
+    let playbackStartTime = 0;
+    let sampleRate = 44100;
+    let channelCount = 1;
+    let bufferDuration = 0.02; // 20ms chunks
+    let maxQueueSize = 50; // Maximum queue size to prevent memory issues
 
     function addLog(message, type = 'info') {
         const entry = document.createElement('div');
@@ -196,6 +205,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     await audioContext.resume();
                 }
                 
+                // Update audio parameters
+                sampleRate = audioContext.sampleRate;
+                addLog(`Audio context created - Sample rate: ${sampleRate}Hz`, 'info');
+                
                 analyser = audioContext.createAnalyser();
                 
                 // Get selected microphone
@@ -256,15 +269,28 @@ document.addEventListener('DOMContentLoaded', () => {
             
             try {
                 const buffer = new Float32Array(data);
-                const audioBuffer = audioContext.createBuffer(1, buffer.length, audioContext.sampleRate);
-                audioBuffer.copyToChannel(buffer, 0);
-
-                const source = audioContext.createBufferSource();
-                source.buffer = audioBuffer;
-                source.connect(audioContext.destination);
-                source.start();
+                
+                // Add to queue instead of playing immediately
+                if (audioBufferQueue.length < maxQueueSize) {
+                    audioBufferQueue.push({
+                        data: buffer,
+                        timestamp: audioContext.currentTime
+                    });
+                    
+                    // Start playback if not already playing
+                    if (!isPlaying) {
+                        startContinuousPlayback();
+                    }
+                } else {
+                    // Queue is full, drop oldest buffer
+                    audioBufferQueue.shift();
+                    audioBufferQueue.push({
+                        data: buffer,
+                        timestamp: audioContext.currentTime
+                    });
+                }
             } catch (err) {
-                console.error('Error playing audio:', err);
+                console.error('Error queuing audio:', err);
             }
         });
 
@@ -288,7 +314,75 @@ document.addEventListener('DOMContentLoaded', () => {
         stopAudioProcessing();
     });
 
+    function startContinuousPlayback() {
+        if (isPlaying) return;
+        isPlaying = true;
+        playbackStartTime = audioContext.currentTime;
+        scheduleNextBuffer();
+    }
+
+    function scheduleNextBuffer() {
+        if (!isPlaying || !audioContext || audioContext.state === 'closed') {
+            isPlaying = false;
+            return;
+        }
+
+        // Check if we have buffers to play
+        if (audioBufferQueue.length === 0) {
+            // No buffers available, check again in a few milliseconds
+            setTimeout(() => {
+                if (audioBufferQueue.length === 0) {
+                    // Still no buffers, stop playback
+                    isPlaying = false;
+                } else {
+                    scheduleNextBuffer();
+                }
+            }, 10);
+            return;
+        }
+
+        // Get the next buffer from queue
+        const bufferInfo = audioBufferQueue.shift();
+        const buffer = bufferInfo.data;
+
+        try {
+            // Create audio buffer
+            const audioBuffer = audioContext.createBuffer(channelCount, buffer.length, sampleRate);
+            audioBuffer.copyToChannel(buffer, 0);
+
+            // Create source and schedule playback
+            const source = audioContext.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(audioContext.destination);
+
+            // Calculate when to start this buffer
+            const currentTime = audioContext.currentTime;
+            const scheduleTime = Math.max(currentTime, playbackStartTime);
+            
+            source.start(scheduleTime);
+            
+            // Update playback start time for next buffer
+            playbackStartTime = scheduleTime + audioBuffer.duration;
+
+            // Schedule next buffer immediately
+            setTimeout(() => scheduleNextBuffer(), 0);
+
+        } catch (err) {
+            console.error('Error playing buffered audio:', err);
+            // Continue with next buffer
+            setTimeout(() => scheduleNextBuffer(), 10);
+        }
+    }
+
+    function stopContinuousPlayback() {
+        isPlaying = false;
+        audioBufferQueue = [];
+        playbackStartTime = 0;
+    }
+
     function stopAudioProcessing() {
+        stopContinuousPlayback();
+        
         if (mediaStream) {
             mediaStream.getTracks().forEach(track => track.stop());
             mediaStream = null;
