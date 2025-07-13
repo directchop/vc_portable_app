@@ -12,6 +12,7 @@
     "start:tcp": "echo 'tcp 8080' | node linux-cli-server.js",
     "start:udp": "echo 'udp 8081' | node linux-cli-server.js",
     "start:all": "echo 'all' | node linux-cli-server.js",
+    "start:web-udp": "echo -e 'web\\nudp\\nbridge' | node linux-cli-server.js",
     "electron": "electron electron-main.cjs",
     "build": "electron-builder",
     "build-win": "electron-builder --win",

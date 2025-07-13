@@ -223,6 +223,11 @@ document.addEventListener('DOMContentLoaded', () => {
             connectBtn.disabled = true;
             disconnectBtn.disabled = false;
             muteBtn.disabled = false;
+            
+            // Send protocol preference if UDP is selected
+            if (protocol === 'udp') {
+                socket.emit('setProtocol', 'udp');
+            }
 
             try {
                 // Create audio context with proper vendor prefix handling
@@ -300,6 +305,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateStatus('disconnected', 'Mic Error');
                 if (socket) socket.disconnect();
             }
+        });
+        
+        socket.on('protocolSet', (response) => {
+            addLog(`Protocol: ${response.message}`, 'info');
         });
 
         socket.on('voice', (data) => {

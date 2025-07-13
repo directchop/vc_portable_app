@@ -24,6 +24,8 @@ class LinuxCLIServer extends EventEmitter {
         this.clients = new Map();
         this.udpClients = new Map();
         this.rooms = new Map();
+        this.bridgeMode = false; // WebSocket to UDP bridge mode
+        this.udpBridge = null;
     }
 
     startWebServer(port = 3000) {
@@ -155,9 +157,25 @@ class LinuxCLIServer extends EventEmitter {
             this.broadcastClientUpdate();
 
             socket.on('voice', (data) => {
-                // Broadcast voice data to all other clients
-                socket.broadcast.emit('voice', data);
-                console.log(`[WebSocket] Voice data relayed from ${clientId}: ${data.length} bytes`);
+                if (this.bridgeMode && this.udpBridge) {
+                    // Bridge mode: relay to UDP clients
+                    for (const [id, client] of this.udpClients.entries()) {
+                        const buffer = Buffer.from(data);
+                        this.udpBridge.send(buffer, client.port, client.address);
+                    }
+                    console.log(`[Bridge] WebSocket→UDP from ${clientId}: ${data.length} bytes`);
+                } else {
+                    // Normal mode: broadcast to other WebSocket clients
+                    socket.broadcast.emit('voice', data);
+                    console.log(`[WebSocket] Voice data relayed from ${clientId}: ${data.length} bytes`);
+                }
+            });
+            
+            socket.on('setProtocol', (protocol) => {
+                if (protocol === 'udp') {
+                    console.log(`[WebSocket] Client ${clientId} requested UDP bridge mode`);
+                    socket.emit('protocolSet', { protocol: 'udp-bridge', message: 'Using WebSocket to UDP bridge' });
+                }
             });
 
             socket.on('disconnect', () => {
@@ -233,6 +251,17 @@ class LinuxCLIServer extends EventEmitter {
                 }
             }
             
+            // If bridge mode is enabled, also send to WebSocket clients
+            if (this.bridgeMode && this.io) {
+                const arrayBuffer = new ArrayBuffer(msg.length);
+                const view = new Uint8Array(arrayBuffer);
+                for (let i = 0; i < msg.length; i++) {
+                    view[i] = msg[i];
+                }
+                this.io.emit('voice', arrayBuffer);
+                console.log(`[Bridge] UDP→WebSocket: ${msg.length} bytes`);
+            }
+            
             console.log(`[UDP] Data relayed from ${clientId}: ${msg.length} bytes`);
         });
         
@@ -242,7 +271,18 @@ class LinuxCLIServer extends EventEmitter {
         
         this.udpServer.bind(port, '0.0.0.0', () => {
             console.log(`[UDP] Server started on port ${port}`);
+            this.udpBridge = this.udpServer;
         });
+    }
+    
+    enableBridgeMode() {
+        this.bridgeMode = true;
+        console.log('[Bridge] WebSocket↔UDP bridge mode enabled');
+    }
+    
+    disableBridgeMode() {
+        this.bridgeMode = false;
+        console.log('[Bridge] Bridge mode disabled');
     }
 
     broadcastClientUpdate() {
@@ -315,6 +355,8 @@ async function main() {
     console.log('  udp [port]     - Start UDP server (default: 8081)');
     console.log('  both [webport] [tcpport] - Start web and TCP servers');
     console.log('  all [webport] [tcpport] [udpport] - Start all servers');
+    console.log('  bridge         - Enable WebSocket↔UDP bridge mode');
+    console.log('  nobridge       - Disable bridge mode');
     console.log('  status         - Show server status');
     console.log('  clients        - List connected clients');
     console.log('  stop           - Stop all servers');
@@ -356,6 +398,14 @@ async function main() {
                 server.startTCPServer(atp);
                 server.startUDPServer(aup);
                 break;
+                
+            case 'bridge':
+                server.enableBridgeMode();
+                break;
+                
+            case 'nobridge':
+                server.disableBridgeMode();
+                break;
 
             case 'status':
                 const status = server.getStatus();
@@ -363,6 +413,7 @@ async function main() {
                 console.log(`  Web Server: ${status.webServer}`);
                 console.log(`  TCP Server: ${status.tcpServer}`);
                 console.log(`  UDP Server: ${status.udpServer}`);
+                console.log(`  Bridge Mode: ${server.bridgeMode ? 'Enabled' : 'Disabled'}`);
                 console.log(`  TCP Clients: ${status.clients}`);
                 console.log(`  UDP Clients: ${status.udpClients}`);
                 break;
@@ -398,6 +449,8 @@ async function main() {
                 console.log('  udp [port]     - Start UDP server (default: 8081)');
                 console.log('  both [webport] [tcpport] - Start web and TCP servers');
                 console.log('  all [webport] [tcpport] [udpport] - Start all servers');
+                console.log('  bridge         - Enable WebSocket↔UDP bridge mode');
+                console.log('  nobridge       - Disable bridge mode');
                 console.log('  status         - Show server status');
                 console.log('  clients        - List connected clients');
                 console.log('  stop           - Stop all servers');
