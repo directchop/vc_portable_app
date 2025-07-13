@@ -7,6 +7,11 @@ import net from 'net';
 import { EventEmitter } from 'events';
 import os from 'os';
 import readline from 'readline';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 class LinuxCLIServer extends EventEmitter {
     constructor() {
@@ -37,8 +42,11 @@ class LinuxCLIServer extends EventEmitter {
             next();
         });
 
-        // Simple HTML client for testing
-        app.get('/', (req, res) => {
+        // Serve the GUI files
+        app.use(express.static(path.join(__dirname, 'gui-web')));
+
+        // Fallback HTML client for testing (when gui-web files are not available)
+        app.get('/test', (req, res) => {
             res.send(`
 <!DOCTYPE html>
 <html>
