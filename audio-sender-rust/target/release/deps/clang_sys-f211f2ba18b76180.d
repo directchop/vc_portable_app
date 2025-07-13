@@ -1,0 +1,14 @@
+/Users/hajime/Projects/nvoc_iso/audio-sender-rust/target/release/deps/clang_sys-f211f2ba18b76180.d: /Users/hajime/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/lib.rs /Users/hajime/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/support.rs /Users/hajime/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/link.rs /Users/hajime/Projects/nvoc_iso/audio-sender-rust/target/release/build/clang-sys-0662a510ac68f134/out/macros.rs /Users/hajime/Projects/nvoc_iso/audio-sender-rust/target/release/build/clang-sys-0662a510ac68f134/out/common.rs /Users/hajime/Projects/nvoc_iso/audio-sender-rust/target/release/build/clang-sys-0662a510ac68f134/out/dynamic.rs
+
+/Users/hajime/Projects/nvoc_iso/audio-sender-rust/target/release/deps/libclang_sys-f211f2ba18b76180.rlib: /Users/hajime/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/lib.rs /Users/hajime/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/support.rs /Users/hajime/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/link.rs /Users/hajime/Projects/nvoc_iso/audio-sender-rust/target/release/build/clang-sys-0662a510ac68f134/out/macros.rs /Users/hajime/Projects/nvoc_iso/audio-sender-rust/target/release/build/clang-sys-0662a510ac68f134/out/common.rs /Users/hajime/Projects/nvoc_iso/audio-sender-rust/target/release/build/clang-sys-0662a510ac68f134/out/dynamic.rs
+
+/Users/hajime/Projects/nvoc_iso/audio-sender-rust/target/release/deps/libclang_sys-f211f2ba18b76180.rmeta: /Users/hajime/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/lib.rs /Users/hajime/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/support.rs /Users/hajime/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/link.rs /Users/hajime/Projects/nvoc_iso/audio-sender-rust/target/release/build/clang-sys-0662a510ac68f134/out/macros.rs /Users/hajime/Projects/nvoc_iso/audio-sender-rust/target/release/build/clang-sys-0662a510ac68f134/out/common.rs /Users/hajime/Projects/nvoc_iso/audio-sender-rust/target/release/build/clang-sys-0662a510ac68f134/out/dynamic.rs
+
+/Users/hajime/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/lib.rs:
+/Users/hajime/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/support.rs:
+/Users/hajime/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/link.rs:
+/Users/hajime/Projects/nvoc_iso/audio-sender-rust/target/release/build/clang-sys-0662a510ac68f134/out/macros.rs:
+/Users/hajime/Projects/nvoc_iso/audio-sender-rust/target/release/build/clang-sys-0662a510ac68f134/out/common.rs:
+/Users/hajime/Projects/nvoc_iso/audio-sender-rust/target/release/build/clang-sys-0662a510ac68f134/out/dynamic.rs:
+
+# env-dep:OUT_DIR=/Users/hajime/Projects/nvoc_iso/audio-sender-rust/target/release/build/clang-sys-0662a510ac68f134/out
