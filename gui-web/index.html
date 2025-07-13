@@ -15,14 +15,26 @@
             <span id="statusText">Ready</span>
         </div>
 
+        <div class="server-config">
+            <div class="input-group">
+                <label for="serverUrl">Server URL:</label>
+                <input type="text" id="serverUrl" placeholder="http://localhost:3000" value="">
+                <small>Leave empty to connect to the same server hosting this page</small>
+            </div>
+        </div>
+
         <div class="settings-grid">
             <div class="input-group">
                 <label for="micSelect">Microphone (Input):</label>
-                <select id="micSelect"></select>
+                <select id="micSelect">
+                    <option value="default">Default Microphone</option>
+                </select>
             </div>
             <div class="input-group">
                 <label for="speakerSelect">Speaker (Output):</label>
-                <select id="speakerSelect"></select>
+                <select id="speakerSelect">
+                    <option value="default">Default Speaker</option>
+                </select>
             </div>
             <div class="input-group">
                 <label for="bufferSizeSelect">Buffer Size (Latency):</label>
@@ -39,6 +51,7 @@
         </div>
 
         <div class="connection-controls">
+            <button class="action-btn" id="refreshDevicesBtn">Refresh Devices</button>
             <button class="action-btn" id="connectBtn">Connect</button>
             <button class="action-btn disconnect-btn" id="disconnectBtn">Disconnect</button>
         </div>

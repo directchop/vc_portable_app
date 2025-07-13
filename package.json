@@ -8,6 +8,7 @@
     "start": "node app.js",
     "start:gui": "electron electron-main.cjs",
     "start:web": "node web-server.js",
+    "start:linux": "node linux-cli-server.js",
     "electron": "electron electron-main.cjs",
     "build": "electron-builder",
     "build-win": "electron-builder --win",

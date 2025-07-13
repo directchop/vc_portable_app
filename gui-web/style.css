@@ -159,7 +159,8 @@ h3 {
     color: #b0b0b0;
 }
 
-.input-group input {
+.input-group input,
+.input-group select {
     width: 100%;
     padding: 10px;
     background: #1a1a1a;
@@ -169,13 +170,13 @@ h3 {
     font-size: 14px;
 }
 
-.input-group input:focus {
+.input-group input:focus,
+.input-group select:focus {
     outline: none;
     border-color: #4a9eff;
 }
 
 .action-btn {
-    width: 100%;
     padding: 12px;
     background: #4a9eff;
     border: none;
@@ -184,6 +185,7 @@ h3 {
     cursor: pointer;
     font-size: 16px;
     transition: background 0.3s;
+    margin: 0 5px;
 }
 
 .action-btn:hover {
@@ -256,4 +258,53 @@ h3 {
 
 .log-entry.info {
     color: #6666ff;
+}
+
+.settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    background: #2a2a2a;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.settings-grid .input-group:last-child {
+    grid-column: span 2;
+}
+
+.server-config {
+    background: #2a2a2a;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.server-config small {
+    display: block;
+    margin-top: 5px;
+    color: #888;
+    font-size: 12px;
+}
+
+.connection-controls {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.audio-visualizer-container {
+    background: #2a2a2a;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+#refreshDevicesBtn {
+    background: #666;
+}
+
+#refreshDevicesBtn:hover {
+    background: #777;
 }
