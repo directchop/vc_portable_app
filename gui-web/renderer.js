@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const volumeValue = document.getElementById('volumeValue');
     const protocolSelect = document.getElementById('protocolSelect');
     const refreshBufferBtn = document.getElementById('refreshBufferBtn');
+    const autoRefreshToggle = document.getElementById('autoRefreshToggle');
 
     let socket;
     let audioContext;
@@ -49,6 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Adaptive buffer management
     let adaptiveEnabled = true;
+    let autoRefreshEnabled = true;
     let averageLatency = 0;
     let latencyHistory = [];
     let latencyHistorySize = 10;
@@ -214,6 +216,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Auto refresh toggle event listener
+    autoRefreshToggle.addEventListener('change', (e) => {
+        autoRefreshEnabled = e.target.checked;
+        adaptiveEnabled = e.target.checked; // Disable adaptive management too when auto-refresh is off
+        
+        if (autoRefreshEnabled) {
+            addLog('Auto buffer refresh enabled - automatic latency management', 'info');
+        } else {
+            addLog('Auto buffer refresh disabled - manual control only', 'info');
+            addLog('Note: Latency may increase over time, use Refresh Buffer button as needed', 'warning');
+            addLog('Manual mode preserves audio continuity (no interruptions)', 'info');
+        }
+    });
+
     connectBtn.addEventListener('click', async () => {
         if (isConnected) return;
         addLog('Connecting to server...');
@@ -360,15 +376,22 @@ document.addEventListener('DOMContentLoaded', () => {
                         startContinuousPlayback();
                     }
                 } else {
-                    // Queue is full, drop oldest buffer to prevent lag
-                    const dropped = audioBufferQueue.shift();
-                    audioBufferQueue.push({
-                        data: buffer,
-                        timestamp: audioContext.currentTime,
-                        duration: buffer.length / sampleRate,
-                        id: totalBuffersReceived
-                    });
-                    addLog(`Buffer overflow: dropped buffer ${dropped.id}`, 'warning');
+                    // Queue is full
+                    if (autoRefreshEnabled) {
+                        // Auto mode: drop oldest buffer to prevent lag
+                        const dropped = audioBufferQueue.shift();
+                        audioBufferQueue.push({
+                            data: buffer,
+                            timestamp: audioContext.currentTime,
+                            duration: buffer.length / sampleRate,
+                            id: totalBuffersReceived
+                        });
+                        addLog(`Buffer overflow: dropped buffer ${dropped.id}`, 'warning');
+                    } else {
+                        // Manual mode: just drop the new buffer to preserve continuity
+                        addLog(`Buffer full in manual mode: dropping new buffer ${totalBuffersReceived}`, 'info');
+                        // Don't add the new buffer, preserve existing queue
+                    }
                 }
             } catch (err) {
                 console.error('Error queuing audio:', err);
@@ -524,16 +547,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentTime = audioContext.currentTime;
         const estimatedLatency = (audioBufferQueue.length * bufferDuration * 1000); // in ms
         
-        // Update latency history for adaptive management
-        if (adaptiveEnabled) {
-            latencyHistory.push(estimatedLatency);
-            if (latencyHistory.length > latencyHistorySize) {
-                latencyHistory.shift();
+        // Always update latency history for monitoring, even if auto-refresh is disabled
+        latencyHistory.push(estimatedLatency);
+        if (latencyHistory.length > latencyHistorySize) {
+            latencyHistory.shift();
+        }
+        
+        // Calculate average latency
+        averageLatency = latencyHistory.reduce((a, b) => a + b, 0) / latencyHistory.length;
+        
+        // Only perform auto-refresh if enabled
+        if (!autoRefreshEnabled) {
+            // Manual mode: just log the status occasionally
+            if (Math.random() < 0.1) { // 10% chance to log status
+                addLog(`Buffer status: ${Math.round(estimatedLatency)}ms latency, ${audioBufferQueue.length} buffers (manual mode)`, 'info');
             }
-            
-            // Calculate average latency
-            averageLatency = latencyHistory.reduce((a, b) => a + b, 0) / latencyHistory.length;
-            
+            return;
+        }
+        
+        // Adaptive management (only when auto-refresh is enabled)
+        if (adaptiveEnabled) {
             // Adaptive max latency adjustment
             if (autoRefreshCount > 3) {
                 // If we've refreshed too many times, increase tolerance
@@ -547,20 +580,20 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // Check if latency is too high
+        // Check if latency is too high (only auto-refresh if enabled)
         if (estimatedLatency > maxLatency) {
             autoRefreshCount++;
             addLog(`High latency detected: ${Math.round(estimatedLatency)}ms (avg: ${Math.round(averageLatency)}ms), refreshing buffer...`, 'warning');
             refreshAudioBuffer();
         }
         
-        // Auto-refresh if buffer accumulates too much
+        // Auto-refresh if buffer accumulates too much (only if auto-refresh enabled)
         if (audioBufferQueue.length > maxQueueSize * 0.8) {
             addLog(`Buffer overflow prevention: ${audioBufferQueue.length}/${maxQueueSize}`, 'warning');
             refreshAudioBuffer();
         }
         
-        // Adaptive queue size adjustment
+        // Adaptive queue size adjustment (only when auto-refresh is enabled)
         if (adaptiveEnabled && latencyHistory.length >= 5) {
             if (averageLatency > maxLatency * 0.7) {
                 // Reduce minimum queue size for faster response
