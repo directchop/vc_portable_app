@@ -17,6 +17,11 @@
 
         <div class="server-config">
             <div class="input-group">
+                <label for="pageTitle">Page Title:</label>
+                <input type="text" id="pageTitle" placeholder="Voice Chat Client" value="Voice Chat Client">
+                <small>Custom title for browser tab management</small>
+            </div>
+            <div class="input-group">
                 <label for="serverUrl">Server URL:</label>
                 <input type="text" id="serverUrl" placeholder="http://localhost:3000" value="">
                 <small>Leave empty to connect to the same server hosting this page</small>
@@ -43,6 +48,17 @@
                 <select id="speakerSelect">
                     <option value="default">Default Speaker</option>
                 </select>
+            </div>
+            <div class="input-group">
+                <label for="channelSelect">Output Channels:</label>
+                <select id="channelSelect">
+                    <option value="1" selected>Mono (1ch)</option>
+                    <option value="2">Stereo (2ch)</option>
+                    <option value="4">Quad (4ch)</option>
+                    <option value="6">5.1 Surround (6ch)</option>
+                    <option value="8">7.1 Surround (8ch)</option>
+                </select>
+                <small>Note: Multi-channel may not work on all devices</small>
             </div>
             <div class="input-group">
                 <label for="bufferSizeSelect">Buffer Size (Latency):</label>
@@ -85,7 +101,17 @@
             <button class="action-btn" id="connectBtn">Connect</button>
             <button class="action-btn disconnect-btn" id="disconnectBtn">Disconnect</button>
             <button class="action-btn mute-btn" id="muteBtn">🎤 Mute</button>
-            <button class="action-btn refresh-btn" id="refreshBufferBtn">🔄 Refresh Buffer</button>
+        </div>
+
+        <div class="buffer-controls">
+            <h4>Buffer Controls</h4>
+            <div class="buffer-buttons">
+                <button class="action-btn refresh-btn" id="refreshAllBtn">🔄 All Buffers</button>
+                <button class="action-btn refresh-btn" id="clearReceiveBtn">🔽 Clear Receive</button>
+                <button class="action-btn refresh-btn" id="clearSendBtn">🔼 Clear Send</button>
+                <button class="action-btn info-btn" id="bufferStatusBtn">📊 Status</button>
+            </div>
+            <div id="bufferStatus" class="buffer-status"></div>
         </div>
 
         <div class="audio-visualizer-container">

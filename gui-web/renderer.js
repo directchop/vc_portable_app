@@ -16,8 +16,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const volumeSlider = document.getElementById('volumeSlider');
     const volumeValue = document.getElementById('volumeValue');
     const protocolSelect = document.getElementById('protocolSelect');
-    const refreshBufferBtn = document.getElementById('refreshBufferBtn');
     const autoRefreshToggle = document.getElementById('autoRefreshToggle');
+    const pageTitleInput = document.getElementById('pageTitle');
+    const channelSelect = document.getElementById('channelSelect');
+    
+    // Buffer control buttons
+    const refreshAllBtn = document.getElementById('refreshAllBtn');
+    const clearReceiveBtn = document.getElementById('clearReceiveBtn');
+    const clearSendBtn = document.getElementById('clearSendBtn');
+    const bufferStatusBtn = document.getElementById('bufferStatusBtn');
+    const bufferStatusDiv = document.getElementById('bufferStatus');
 
     let socket;
     let audioContext;
@@ -55,6 +63,14 @@ document.addEventListener('DOMContentLoaded', () => {
     let latencyHistory = [];
     let latencyHistorySize = 10;
     let autoRefreshCount = 0;
+    
+    // Send buffer tracking
+    let sendBufferCount = 0;
+    let sendBufferSize = 0;
+    
+    // Page title management
+    let baseTitle = 'Voice Chat Client';
+    let currentStatus = 'Ready';
 
     function addLog(message, type = 'info') {
         const entry = document.createElement('div');
@@ -64,12 +80,21 @@ document.addEventListener('DOMContentLoaded', () => {
         logArea.scrollTop = logArea.scrollHeight;
     }
 
+    function updatePageTitle() {
+        const titlePrefix = isConnected ? '🟢' : (currentStatus === 'Connecting...' ? '🟡' : '🔴');
+        document.title = `${titlePrefix} ${baseTitle} - ${currentStatus}`;
+    }
+
     function updateStatus(status, message) {
         statusText.textContent = message;
         statusIndicator.className = 'status-indicator';
         isConnected = status === 'connected';
         statusIndicator.classList.toggle('connected', isConnected);
         statusIndicator.classList.toggle('disconnected', !isConnected);
+        
+        // Update page title
+        currentStatus = message;
+        updatePageTitle();
     }
 
     async function refreshDeviceList() {
@@ -207,12 +232,36 @@ document.addEventListener('DOMContentLoaded', () => {
         addLog(`Receive volume set to ${volume}%`, 'info');
     });
 
-    // Refresh buffer button event listener
-    refreshBufferBtn.addEventListener('click', () => {
+    // Buffer control event listeners
+    refreshAllBtn.addEventListener('click', () => {
         if (isConnected) {
-            refreshAudioBuffer();
+            refreshAllBuffers();
         } else {
-            addLog('Not connected - cannot refresh buffer', 'warning');
+            addLog('Not connected - cannot refresh buffers', 'warning');
+        }
+    });
+
+    clearReceiveBtn.addEventListener('click', () => {
+        if (isConnected) {
+            clearReceiveBuffer();
+        } else {
+            addLog('Not connected - cannot clear receive buffer', 'warning');
+        }
+    });
+
+    clearSendBtn.addEventListener('click', () => {
+        if (isConnected) {
+            clearSendBuffer();
+        } else {
+            addLog('Not connected - cannot clear send buffer', 'warning');
+        }
+    });
+
+    bufferStatusBtn.addEventListener('click', () => {
+        if (isConnected) {
+            showBufferStatus();
+        } else {
+            addLog('Not connected - no buffer status available', 'warning');
         }
     });
 
@@ -227,6 +276,24 @@ document.addEventListener('DOMContentLoaded', () => {
             addLog('Auto buffer refresh disabled - manual control only', 'info');
             addLog('Note: Latency may increase over time, use Refresh Buffer button as needed', 'warning');
             addLog('Manual mode preserves audio continuity (no interruptions)', 'info');
+        }
+    });
+
+    // Page title input event listener
+    pageTitleInput.addEventListener('input', (e) => {
+        baseTitle = e.target.value || 'Voice Chat Client';
+        updatePageTitle();
+        addLog(`Page title updated: ${baseTitle}`, 'info');
+    });
+
+    // Channel select event listener
+    channelSelect.addEventListener('change', (e) => {
+        const channels = parseInt(e.target.value);
+        channelCount = channels;
+        addLog(`Output channels set to: ${channels}ch`, 'info');
+        
+        if (isConnected && audioContext) {
+            addLog('Note: Channel change will take effect on next connection', 'warning');
         }
     });
 
@@ -263,7 +330,12 @@ document.addEventListener('DOMContentLoaded', () => {
             connectBtn.disabled = true;
             disconnectBtn.disabled = false;
             muteBtn.disabled = false;
-            refreshBufferBtn.disabled = false;
+            
+            // Enable buffer control buttons
+            refreshAllBtn.disabled = false;
+            clearReceiveBtn.disabled = false;
+            clearSendBtn.disabled = false;
+            bufferStatusBtn.disabled = false;
             
             // Send protocol preference if UDP is selected
             if (protocol === 'udp') {
@@ -326,6 +398,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         const view = new Float32Array(buffer);
                         view.set(inputData);
                         socket.emit('voice', buffer);
+                        
+                        // Track send buffer
+                        sendBufferCount++;
+                        sendBufferSize += buffer.byteLength;
                     }
                 };
 
@@ -462,9 +538,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const buffer = bufferInfo.data;
 
         try {
-            // Create audio buffer
-            const audioBuffer = audioContext.createBuffer(channelCount, buffer.length, sampleRate);
-            audioBuffer.copyToChannel(buffer, 0);
+            // Create audio buffer with selected channel count
+            const selectedChannels = parseInt(channelSelect.value) || 1;
+            const audioBuffer = audioContext.createBuffer(selectedChannels, buffer.length, sampleRate);
+            
+            // Copy mono input to all output channels
+            for (let channel = 0; channel < selectedChannels; channel++) {
+                audioBuffer.copyToChannel(buffer, channel);
+            }
 
             // Create source and schedule playback
             const source = audioContext.createBufferSource();
@@ -516,9 +597,9 @@ document.addEventListener('DOMContentLoaded', () => {
         addLog('Continuous playback stopped', 'info');
     }
     
-    function refreshAudioBuffer() {
+    function clearReceiveBuffer() {
         const queueSize = audioBufferQueue.length;
-        addLog(`Buffer refresh: clearing ${queueSize} buffers`, 'info');
+        addLog(`Clearing receive buffer: ${queueSize} buffers`, 'info');
         
         // Clear buffer queue
         audioBufferQueue = [];
@@ -538,7 +619,65 @@ document.addEventListener('DOMContentLoaded', () => {
         latencyHistory = [];
         averageLatency = 0;
         
-        addLog('Audio buffer refreshed', 'success');
+        addLog('Receive buffer cleared', 'success');
+    }
+    
+    function clearSendBuffer() {
+        addLog('Clearing send buffer...', 'info');
+        
+        // Reset send buffer tracking
+        sendBufferCount = 0;
+        sendBufferSize = 0;
+        
+        // Stop and restart audio processing to clear internal buffers
+        if (scriptProcessor && mediaStream) {
+            scriptProcessor.disconnect();
+            
+            // Reconnect after a brief pause to clear buffers
+            setTimeout(() => {
+                if (audioContext && scriptProcessor) {
+                    scriptProcessor.connect(audioContext.destination);
+                    addLog('Send buffer cleared and restarted', 'success');
+                }
+            }, 50);
+        } else {
+            addLog('Send buffer cleared', 'success');
+        }
+    }
+    
+    function refreshAllBuffers() {
+        addLog('Refreshing all buffers...', 'info');
+        clearReceiveBuffer();
+        clearSendBuffer();
+        addLog('All buffers refreshed', 'success');
+    }
+    
+    function showBufferStatus() {
+        const receiveLatency = Math.round(audioBufferQueue.length * bufferDuration * 1000);
+        const receiveBuffers = audioBufferQueue.length;
+        const avgLatency = Math.round(averageLatency);
+        const selectedChannels = parseInt(channelSelect.value) || 1;
+        const protocol = protocolSelect.value.toUpperCase();
+        
+        const status = `
+            <div class="status-item">📥 Receive: ${receiveBuffers} buffers (${receiveLatency}ms)</div>
+            <div class="status-item">📤 Send: ${sendBufferCount} buffers</div>
+            <div class="status-item">📊 Avg Latency: ${avgLatency}ms</div>
+            <div class="status-item">🔄 Auto Refresh: ${autoRefreshEnabled ? 'ON' : 'OFF'}</div>
+            <div class="status-item">⚡ Queue Size: ${receiveBuffers}/${maxQueueSize}</div>
+            <div class="status-item">🎵 Output: ${selectedChannels}ch ${protocol}</div>
+            <div class="status-item">📝 Title: ${baseTitle}</div>
+        `;
+        
+        bufferStatusDiv.innerHTML = status;
+        bufferStatusDiv.style.display = bufferStatusDiv.style.display === 'block' ? 'none' : 'block';
+        
+        addLog(`Buffer status - Receive: ${receiveBuffers}/${maxQueueSize}, ${selectedChannels}ch, Latency: ${receiveLatency}ms`, 'info');
+    }
+    
+    // Legacy function for backward compatibility
+    function refreshAudioBuffer() {
+        refreshAllBuffers();
     }
     
     function checkBufferLatency() {
@@ -628,7 +767,16 @@ document.addEventListener('DOMContentLoaded', () => {
         muteBtn.textContent = '🎤 Mute';
         muteBtn.classList.remove('muted');
         muteBtn.disabled = true;
-        refreshBufferBtn.disabled = true;
+        
+        // Disable buffer control buttons
+        refreshAllBtn.disabled = true;
+        clearReceiveBtn.disabled = true;
+        clearSendBtn.disabled = true;
+        bufferStatusBtn.disabled = true;
+        
+        // Hide buffer status
+        bufferStatusDiv.style.display = 'none';
+        bufferStatusDiv.innerHTML = '';
     }
 
     function stopAudioProcessing() {
@@ -672,5 +820,14 @@ document.addEventListener('DOMContentLoaded', () => {
     updateStatus('disconnected', 'Ready');
     disconnectBtn.disabled = true;
     muteBtn.disabled = true;
-    refreshBufferBtn.disabled = true;
+    
+    // Initial buffer control state
+    refreshAllBtn.disabled = true;
+    clearReceiveBtn.disabled = true;
+    clearSendBtn.disabled = true;
+    bufferStatusBtn.disabled = true;
+    
+    // Initialize page title
+    baseTitle = pageTitleInput.value || 'Voice Chat Client';
+    updatePageTitle();
 });
