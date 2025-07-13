@@ -21,6 +21,14 @@
                 <input type="text" id="serverUrl" placeholder="http://localhost:3000" value="">
                 <small>Leave empty to connect to the same server hosting this page</small>
             </div>
+            <div class="input-group">
+                <label for="protocolSelect">Protocol:</label>
+                <select id="protocolSelect">
+                    <option value="tcp" selected>TCP (Reliable)</option>
+                    <option value="udp">UDP (Low Latency)</option>
+                </select>
+                <small>UDP offers lower latency but may drop packets</small>
+            </div>
         </div>
 
         <div class="settings-grid">

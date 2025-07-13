@@ -4,6 +4,7 @@ import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import net from 'net';
+import dgram from 'dgram';
 import { EventEmitter } from 'events';
 import os from 'os';
 import readline from 'readline';
@@ -18,8 +19,10 @@ class LinuxCLIServer extends EventEmitter {
         super();
         this.webServer = null;
         this.tcpServer = null;
+        this.udpServer = null;
         this.io = null;
         this.clients = new Map();
+        this.udpClients = new Map();
         this.rooms = new Map();
     }
 
@@ -206,6 +209,41 @@ class LinuxCLIServer extends EventEmitter {
             console.log(`[TCP] Server started on port ${port}`);
         });
     }
+    
+    startUDPServer(port = 8081) {
+        this.udpServer = dgram.createSocket('udp4');
+        
+        this.udpServer.on('message', (msg, rinfo) => {
+            const clientId = `${rinfo.address}:${rinfo.port}`;
+            
+            // Add client if not already known
+            if (!this.udpClients.has(clientId)) {
+                this.udpClients.set(clientId, {
+                    address: rinfo.address,
+                    port: rinfo.port,
+                    connectedAt: new Date()
+                });
+                console.log(`[UDP] Client connected: ${clientId}`);
+            }
+            
+            // Broadcast to all other UDP clients
+            for (const [id, client] of this.udpClients.entries()) {
+                if (id !== clientId) {
+                    this.udpServer.send(msg, client.port, client.address);
+                }
+            }
+            
+            console.log(`[UDP] Data relayed from ${clientId}: ${msg.length} bytes`);
+        });
+        
+        this.udpServer.on('error', (err) => {
+            console.error('[UDP] Server error:', err.message);
+        });
+        
+        this.udpServer.bind(port, '0.0.0.0', () => {
+            console.log(`[UDP] Server started on port ${port}`);
+        });
+    }
 
     broadcastClientUpdate() {
         if (this.io) {
@@ -241,14 +279,21 @@ class LinuxCLIServer extends EventEmitter {
             this.tcpServer.close();
             console.log('[TCP] Server stopped');
         }
+        if (this.udpServer) {
+            this.udpServer.close();
+            console.log('[UDP] Server stopped');
+        }
         this.clients.clear();
+        this.udpClients.clear();
     }
 
     getStatus() {
         return {
             webServer: this.webServer ? 'running' : 'stopped',
             tcpServer: this.tcpServer ? 'running' : 'stopped',
-            clients: this.clients.size
+            udpServer: this.udpServer ? 'running' : 'stopped',
+            clients: this.clients.size,
+            udpClients: this.udpClients.size
         };
     }
 }
@@ -267,7 +312,9 @@ async function main() {
     console.log('Commands:');
     console.log('  web [port]     - Start web server (default: 3000)');
     console.log('  tcp [port]     - Start TCP server (default: 8080)');
-    console.log('  both [webport] [tcpport] - Start both servers');
+    console.log('  udp [port]     - Start UDP server (default: 8081)');
+    console.log('  both [webport] [tcpport] - Start web and TCP servers');
+    console.log('  all [webport] [tcpport] [udpport] - Start all servers');
     console.log('  status         - Show server status');
     console.log('  clients        - List connected clients');
     console.log('  stop           - Stop all servers');
@@ -288,6 +335,11 @@ async function main() {
                 const tcpPort = parseInt(args[0]) || 8080;
                 server.startTCPServer(tcpPort);
                 break;
+                
+            case 'udp':
+                const udpPort = parseInt(args[0]) || 8081;
+                server.startUDPServer(udpPort);
+                break;
 
             case 'both':
                 const wp = parseInt(args[0]) || 3000;
@@ -295,21 +347,40 @@ async function main() {
                 server.startWebServer(wp);
                 server.startTCPServer(tp);
                 break;
+                
+            case 'all':
+                const awp = parseInt(args[0]) || 3000;
+                const atp = parseInt(args[1]) || 8080;
+                const aup = parseInt(args[2]) || 8081;
+                server.startWebServer(awp);
+                server.startTCPServer(atp);
+                server.startUDPServer(aup);
+                break;
 
             case 'status':
                 const status = server.getStatus();
                 console.log('Server Status:');
                 console.log(`  Web Server: ${status.webServer}`);
                 console.log(`  TCP Server: ${status.tcpServer}`);
-                console.log(`  Connected Clients: ${status.clients}`);
+                console.log(`  UDP Server: ${status.udpServer}`);
+                console.log(`  TCP Clients: ${status.clients}`);
+                console.log(`  UDP Clients: ${status.udpClients}`);
                 break;
 
             case 'clients':
-                console.log('Connected Clients:');
+                console.log('Connected TCP Clients:');
                 if (server.clients.size === 0) {
-                    console.log('  No clients connected');
+                    console.log('  No TCP clients connected');
                 } else {
                     server.clients.forEach((client, id) => {
+                        console.log(`  ${id} - Connected: ${client.connectedAt.toISOString()}`);
+                    });
+                }
+                console.log('\nConnected UDP Clients:');
+                if (server.udpClients.size === 0) {
+                    console.log('  No UDP clients connected');
+                } else {
+                    server.udpClients.forEach((client, id) => {
                         console.log(`  ${id} - Connected: ${client.connectedAt.toISOString()}`);
                     });
                 }
@@ -324,7 +395,9 @@ async function main() {
                 console.log('Commands:');
                 console.log('  web [port]     - Start web server (default: 3000)');
                 console.log('  tcp [port]     - Start TCP server (default: 8080)');
-                console.log('  both [webport] [tcpport] - Start both servers');
+                console.log('  udp [port]     - Start UDP server (default: 8081)');
+                console.log('  both [webport] [tcpport] - Start web and TCP servers');
+                console.log('  all [webport] [tcpport] [udpport] - Start all servers');
                 console.log('  status         - Show server status');
                 console.log('  clients        - List connected clients');
                 console.log('  stop           - Stop all servers');

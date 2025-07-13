@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const muteBtn = document.getElementById('muteBtn');
     const volumeSlider = document.getElementById('volumeSlider');
     const volumeValue = document.getElementById('volumeValue');
+    const protocolSelect = document.getElementById('protocolSelect');
 
     let socket;
     let audioContext;
@@ -196,6 +197,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Get server URL from input or use current location
         const serverUrl = serverUrlInput.value || window.location.origin;
+        const protocol = protocolSelect.value;
+        
+        // Note about protocol selection
+        if (protocol === 'udp') {
+            addLog('Note: Web client uses WebSocket. UDP is available in native client only.', 'info');
+        }
         
         try {
             socket = io(serverUrl, {

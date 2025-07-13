@@ -1,4 +1,5 @@
 import net from 'net';
+import dgram from 'dgram';
 import { PassThrough } from 'stream';
 import recorder from 'node-record-lpcm16';
 import Speaker from 'speaker';
@@ -10,6 +11,10 @@ export class VoiceChatCore extends EventEmitter {
         super();
         this.server = null;
         this.client = null;
+        this.udpServer = null;
+        this.udpClient = null;
+        this.udpRemote = null;
+        this.protocol = 'tcp';
         this.recording = null;
         this.speaker = null;
         this.isConnected = false;
@@ -25,7 +30,17 @@ export class VoiceChatCore extends EventEmitter {
         };
     }
 
-    startServer(port) {
+    startServer(port, protocol = 'tcp') {
+        this.protocol = protocol;
+        
+        if (protocol === 'udp') {
+            this.startUDPServer(port);
+        } else {
+            this.startTCPServer(port);
+        }
+    }
+    
+    startTCPServer(port) {
         this.server = net.createServer((socket) => {
             this.emit('status', `Client connected from ${socket.remoteAddress}:${socket.remotePort}`);
             this.handleConnection(socket);
@@ -40,7 +55,17 @@ export class VoiceChatCore extends EventEmitter {
         });
     }
 
-    connectToPeer(host, port) {
+    connectToPeer(host, port, protocol = 'tcp') {
+        this.protocol = protocol;
+        
+        if (protocol === 'udp') {
+            this.connectUDP(host, port);
+        } else {
+            this.connectTCP(host, port);
+        }
+    }
+    
+    connectTCP(host, port) {
         this.emit('status', `Attempting to connect to ${host}:${port}`);
         
         this.client = net.createConnection({ host, port }, () => {
@@ -69,7 +94,7 @@ export class VoiceChatCore extends EventEmitter {
         this.emit('status', `Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
         
         setTimeout(() => {
-            this.connectToPeer(host, port);
+            this.connectTCP(host, port);
         }, this.reconnectDelay);
     }
 
@@ -123,7 +148,7 @@ export class VoiceChatCore extends EventEmitter {
         });
     }
 
-    startAudio(socket) {
+    startAudio(socket = null) {
         try {
             const deviceOptions = AudioDevices.getDeviceOptions(this.outputDeviceId);
             const speakerOptions = { ...this.audioFormat, ...deviceOptions };
@@ -158,7 +183,12 @@ export class VoiceChatCore extends EventEmitter {
                     const chunk = buffer.slice(0, chunkSize);
                     buffer = buffer.slice(chunkSize);
                     
-                    if (socket && !socket.destroyed && this.isConnected) {
+                    if (this.protocol === 'udp' && this.udpRemote) {
+                        const udpSocket = this.udpClient || this.udpServer;
+                        if (udpSocket && this.isConnected) {
+                            udpSocket.send(chunk, this.udpRemote.port, this.udpRemote.address);
+                        }
+                    } else if (socket && !socket.destroyed && this.isConnected) {
                         socket.write(chunk);
                     }
                 }
@@ -184,6 +214,52 @@ export class VoiceChatCore extends EventEmitter {
         this.emit('status', 'Voice chat stopped');
     }
 
+    startUDPServer(port) {
+        this.udpServer = dgram.createSocket('udp4');
+        
+        this.udpServer.on('error', (err) => {
+            this.emit('error', `UDP Server error: ${err.message}`);
+        });
+        
+        this.udpServer.on('message', (msg, rinfo) => {
+            if (!this.udpRemote) {
+                this.udpRemote = { address: rinfo.address, port: rinfo.port };
+                this.emit('status', `UDP Client connected from ${rinfo.address}:${rinfo.port}`);
+                this.isConnected = true;
+                this.startAudio();
+            }
+            
+            if (this.speaker && !this.speaker.destroyed) {
+                this.speaker.write(msg);
+            }
+        });
+        
+        this.udpServer.bind(port, () => {
+            this.emit('status', `UDP Server listening on port ${port}`);
+        });
+    }
+    
+    connectUDP(host, port) {
+        this.emit('status', `Attempting UDP connection to ${host}:${port}`);
+        
+        this.udpClient = dgram.createSocket('udp4');
+        this.udpRemote = { address: host, port: port };
+        
+        this.udpClient.on('error', (err) => {
+            this.emit('error', `UDP Connection error: ${err.message}`);
+        });
+        
+        this.udpClient.on('message', (msg) => {
+            if (this.speaker && !this.speaker.destroyed) {
+                this.speaker.write(msg);
+            }
+        });
+        
+        this.isConnected = true;
+        this.emit('status', 'UDP connection established');
+        this.startAudio();
+    }
+    
     stop() {
         this.isConnected = false;
         this.stopAudio();
@@ -197,5 +273,17 @@ export class VoiceChatCore extends EventEmitter {
             this.server.close();
             this.server = null;
         }
+        
+        if (this.udpServer) {
+            this.udpServer.close();
+            this.udpServer = null;
+        }
+        
+        if (this.udpClient) {
+            this.udpClient.close();
+            this.udpClient = null;
+        }
+        
+        this.udpRemote = null;
     }
 }
