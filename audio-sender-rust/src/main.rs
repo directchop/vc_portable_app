@@ -76,6 +76,11 @@ fn main() -> Result<()> {
 
     if matches.get_flag("list-devices") {
         list_audio_devices()?;
+        println!();
+        println!("💡 To use a specific device:");
+        println!("   ./audio-sender --device \"MacBook\" --server IP:PORT");
+        println!("   ./audio-sender --device \"USB\" --server IP:PORT");
+        println!("   (Use part of the device name)");
         return Ok(());
     }
 
@@ -91,7 +96,7 @@ fn main() -> Result<()> {
         protocol,
         sample_rate: matches.get_one::<String>("sample-rate").unwrap().parse()?,
         channels: matches.get_one::<String>("channels").unwrap().parse()?,
-        buffer_size: 4096,
+        buffer_size: 1024,
     };
 
     println!("🎤 Audio Sender starting...");
@@ -193,8 +198,17 @@ fn start_audio_sender(config: &AudioConfig) -> Result<()> {
 }
 
 fn send_tcp_audio(server_addr: &str, rx: mpsc::Receiver<Vec<f32>>) -> Result<()> {
-    let mut stream = TcpStream::connect(server_addr)?;
-    println!("🔗 TCP connection established");
+    println!("🔌 Attempting TCP connection to {}", server_addr);
+    let mut stream = match TcpStream::connect(server_addr) {
+        Ok(s) => {
+            println!("🔗 TCP connection established successfully");
+            s
+        },
+        Err(e) => {
+            eprintln!("❌ TCP connection failed: {}", e);
+            return Err(anyhow!("TCP connection failed: {}", e));
+        }
+    };
     
     let mut packet_count = 0;
     for audio_data in rx {
@@ -210,8 +224,11 @@ fn send_tcp_audio(server_addr: &str, rx: mpsc::Receiver<Vec<f32>>) -> Result<()>
         }
         
         packet_count += 1;
+        if packet_count == 1 {
+            println!("📦 First packet size: {} bytes", byte_data.len());
+        }
         if packet_count % 100 == 0 {
-            println!("📡 Sent {} audio packets via TCP", packet_count);
+            println!("📡 Sent {} audio packets via TCP ({}B each)", packet_count, byte_data.len());
         }
     }
     
@@ -219,9 +236,15 @@ fn send_tcp_audio(server_addr: &str, rx: mpsc::Receiver<Vec<f32>>) -> Result<()>
 }
 
 fn send_udp_audio(server_addr: &str, rx: mpsc::Receiver<Vec<f32>>) -> Result<()> {
+    println!("🔌 Attempting UDP connection to {}", server_addr);
     let socket = UdpSocket::bind("0.0.0.0:0")?;
-    socket.connect(server_addr)?;
-    println!("🔗 UDP connection established");
+    match socket.connect(server_addr) {
+        Ok(_) => println!("🔗 UDP connection established successfully"),
+        Err(e) => {
+            eprintln!("❌ UDP connection failed: {}", e);
+            return Err(anyhow!("UDP connection failed: {}", e));
+        }
+    }
     
     let mut packet_count = 0;
     for audio_data in rx {
@@ -232,13 +255,16 @@ fn send_udp_audio(server_addr: &str, rx: mpsc::Receiver<Vec<f32>>) -> Result<()>
             .collect();
         
         if let Err(e) = socket.send(&byte_data) {
-            eprintln!("❌ UDP send error: {}", e);
+            eprintln!("❌ UDP send error: {} (packet size: {}B)", e, byte_data.len());
             continue;
         }
         
         packet_count += 1;
+        if packet_count == 1 {
+            println!("📦 First UDP packet size: {} bytes", byte_data.len());
+        }
         if packet_count % 100 == 0 {
-            println!("📡 Sent {} audio packets via UDP", packet_count);
+            println!("📡 Sent {} audio packets via UDP ({}B each)", packet_count, byte_data.len());
         }
     }
     

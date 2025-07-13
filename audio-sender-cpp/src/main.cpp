@@ -30,7 +30,7 @@ struct Config {
     std::string device_name;
     int sample_rate = 16000;
     int channels = 1;
-    int buffer_size = 4096;
+    int buffer_size = 1024;
     bool list_devices = false;
 };
 
@@ -65,7 +65,14 @@ Config parse_args(int argc, char* argv[]) {
         } else if (arg == "-l" || arg == "--list-devices") {
             config.list_devices = true;
         } else if ((arg == "-s" || arg == "--server") && i + 1 < argc) {
-            config.server_addr = argv[++i];
+            std::string server_full = argv[++i];
+            size_t colon_pos = server_full.find(':');
+            if (colon_pos != std::string::npos) {
+                config.server_addr = server_full.substr(0, colon_pos);
+                config.server_port = std::stoi(server_full.substr(colon_pos + 1));
+            } else {
+                config.server_addr = server_full;
+            }
         } else if ((arg == "-p" || arg == "--port") && i + 1 < argc) {
             config.server_port = std::stoi(argv[++i]);
         } else if (arg == "--protocol" && i + 1 < argc) {
@@ -118,6 +125,11 @@ int main(int argc, char* argv[]) {
                 std::cout << "     Channels: " << devices[i].channels 
                          << ", Sample Rate: " << devices[i].sample_rate << " Hz\n\n";
             }
+            
+            std::cout << "💡 To use a specific device:\n";
+            std::cout << "   ./audio-sender --device \"MacBook\" --server IP:PORT\n";
+            std::cout << "   ./audio-sender --device \"USB\" --server IP:PORT\n";
+            std::cout << "   (Use part of the device name)\n";
             return 0;
         }
         
