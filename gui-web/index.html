@@ -59,12 +59,17 @@
                     <option value="10">10 (Highest Stability)</option>
                 </select>
             </div>
+            <div class="input-group">
+                <label for="volumeSlider">Receive Volume: <span id="volumeValue">100%</span></label>
+                <input type="range" id="volumeSlider" min="0" max="200" value="100" step="5">
+            </div>
         </div>
 
         <div class="connection-controls">
             <button class="action-btn" id="refreshDevicesBtn">Refresh Devices</button>
             <button class="action-btn" id="connectBtn">Connect</button>
             <button class="action-btn disconnect-btn" id="disconnectBtn">Disconnect</button>
+            <button class="action-btn mute-btn" id="muteBtn">🎤 Mute</button>
         </div>
 
         <div class="audio-visualizer-container">

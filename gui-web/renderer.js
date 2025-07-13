@@ -12,6 +12,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const speakerSelect = document.getElementById('speakerSelect');
     const bufferSizeSelect = document.getElementById('bufferSizeSelect');
     const bufferCountSelect = document.getElementById('bufferCountSelect');
+    const muteBtn = document.getElementById('muteBtn');
+    const volumeSlider = document.getElementById('volumeSlider');
+    const volumeValue = document.getElementById('volumeValue');
 
     let socket;
     let audioContext;
@@ -32,6 +35,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let maxQueueSize = 100; // Increased queue size
     let minQueueSize = 3; // Minimum buffers before starting playback
     let lastScheduledEndTime = 0;
+    let isMuted = false;
+    let receiveVolume = 1.0; // 0.0 to 2.0
 
     function addLog(message, type = 'info') {
         const entry = document.createElement('div');
@@ -168,6 +173,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     refreshDevicesBtn.addEventListener('click', refreshDeviceList);
 
+    // Mute button event listener
+    muteBtn.addEventListener('click', () => {
+        isMuted = !isMuted;
+        muteBtn.textContent = isMuted ? '🔇 Unmute' : '🎤 Mute';
+        muteBtn.classList.toggle('muted', isMuted);
+        addLog(isMuted ? 'Microphone muted' : 'Microphone unmuted', 'info');
+    });
+
+    // Volume slider event listener
+    volumeSlider.addEventListener('input', (e) => {
+        const volume = parseInt(e.target.value);
+        receiveVolume = volume / 100.0;
+        volumeValue.textContent = `${volume}%`;
+        addLog(`Receive volume set to ${volume}%`, 'info');
+    });
+
     connectBtn.addEventListener('click', async () => {
         if (isConnected) return;
         addLog('Connecting to server...');
@@ -194,6 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateStatus('connected', 'Connected');
             connectBtn.disabled = true;
             disconnectBtn.disabled = false;
+            muteBtn.disabled = false;
 
             try {
                 // Create audio context with proper vendor prefix handling
@@ -244,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 source.connect(analyser);
 
                 scriptProcessor.onaudioprocess = (e) => {
-                    if (socket && socket.connected) {
+                    if (socket && socket.connected && !isMuted) {
                         const inputData = e.inputBuffer.getChannelData(0);
                         // Convert to ArrayBuffer for compatibility
                         const buffer = new ArrayBuffer(inputData.length * 4);
@@ -389,17 +411,20 @@ document.addEventListener('DOMContentLoaded', () => {
             nextPlayTime = scheduleTime + audioBuffer.duration;
             lastScheduledEndTime = nextPlayTime;
 
-            // Add crossfade to reduce clicks (simple volume envelope)
+            // Add crossfade to reduce clicks and apply volume control
             const gainNode = audioContext.createGain();
             source.disconnect();
             source.connect(gainNode);
             gainNode.connect(audioContext.destination);
             
-            // Very short fade in/out to reduce clicks
+            // Apply receive volume
+            const volumeMultiplier = receiveVolume;
+            
+            // Very short fade in/out to reduce clicks with volume control
             const fadeTime = 0.002; // 2ms
             gainNode.gain.setValueAtTime(0, scheduleTime);
-            gainNode.gain.linearRampToValueAtTime(1, scheduleTime + fadeTime);
-            gainNode.gain.setValueAtTime(1, nextPlayTime - fadeTime);
+            gainNode.gain.linearRampToValueAtTime(volumeMultiplier, scheduleTime + fadeTime);
+            gainNode.gain.setValueAtTime(volumeMultiplier, nextPlayTime - fadeTime);
             gainNode.gain.linearRampToValueAtTime(0, nextPlayTime);
 
             // Schedule next buffer
@@ -421,8 +446,16 @@ document.addEventListener('DOMContentLoaded', () => {
         addLog('Continuous playback stopped', 'info');
     }
 
+    function resetMuteAndVolume() {
+        isMuted = false;
+        muteBtn.textContent = '🎤 Mute';
+        muteBtn.classList.remove('muted');
+        muteBtn.disabled = true;
+    }
+
     function stopAudioProcessing() {
         stopContinuousPlayback();
+        resetMuteAndVolume();
         
         if (mediaStream) {
             mediaStream.getTracks().forEach(track => track.stop());
@@ -459,4 +492,5 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initial state
     updateStatus('disconnected', 'Ready');
     disconnectBtn.disabled = true;
+    muteBtn.disabled = true;
 });
