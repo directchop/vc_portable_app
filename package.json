@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node app.js",
     "start:gui": "electron electron-main.cjs",
+    "start:web": "node web-server.js",
     "electron": "electron electron-main.cjs",
     "build": "electron-builder",
     "build-win": "electron-builder --win",
@@ -15,7 +16,9 @@
     "build-all": "electron-builder --win --mac --linux"
   },
   "dependencies": {
+    "express": "^5.1.0",
     "node-record-lpcm16": "^1.0.1",
+    "socket.io": "^4.8.1",
     "speaker": "^0.5.4"
   },
   "devDependencies": {
@@ -53,21 +56,20 @@
         {
           "target": "nsis",
           "arch": [
-            "x64",
-            "ia32"
+            "x64"
           ]
         },
         {
-          "target": "portable"
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
         }
-      ],
-      "icon": "build/icon.ico"
+      ]
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico",
       "license": "LICENSE.txt"
     },
     "mac": {

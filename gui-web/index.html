@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Voice Chat</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Web Voice Chat</h1>
+        
+        <div class="status-section">
+            <div class="status-indicator disconnected" id="statusIndicator"></div>
+            <span id="statusText">Ready</span>
+        </div>
+
+        <div class="settings-grid">
+            <div class="input-group">
+                <label for="micSelect">Microphone (Input):</label>
+                <select id="micSelect"></select>
+            </div>
+            <div class="input-group">
+                <label for="speakerSelect">Speaker (Output):</label>
+                <select id="speakerSelect"></select>
+            </div>
+            <div class="input-group">
+                <label for="bufferSizeSelect">Buffer Size (Latency):</label>
+                <select id="bufferSizeSelect">
+                    <option value="256">256 (Lowest)</option>
+                    <option value="512">512</option>
+                    <option value="1024">1024</option>
+                    <option value="2048">2048</option>
+                    <option value="4096" selected>4096 (Standard)</option>
+                    <option value="8192">8192</option>
+                    <option value="16384">16384 (Highest)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="connection-controls">
+            <button class="action-btn" id="connectBtn">Connect</button>
+            <button class="action-btn disconnect-btn" id="disconnectBtn">Disconnect</button>
+        </div>
+
+        <div class="audio-visualizer-container">
+            <canvas id="audioCanvas" width="400" height="100"></canvas>
+        </div>
+
+        <div class="log-section">
+            <h3>Log</h3>
+            <div id="logArea"></div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="renderer.js"></script>
+</body>
+</html>
