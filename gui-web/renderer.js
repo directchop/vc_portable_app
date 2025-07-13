@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const micSelect = document.getElementById('micSelect');
     const speakerSelect = document.getElementById('speakerSelect');
     const bufferSizeSelect = document.getElementById('bufferSizeSelect');
+    const bufferCountSelect = document.getElementById('bufferCountSelect');
 
     let socket;
     let audioContext;
@@ -223,8 +224,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
                 const source = audioContext.createMediaStreamSource(mediaStream);
                 
-                // Get selected buffer size
+                // Get selected buffer size and count
                 const bufferSize = parseInt(bufferSizeSelect.value) || 4096;
+                const bufferCount = parseInt(bufferCountSelect.value) || 3;
+                
+                // Update minimum queue size based on user selection
+                minQueueSize = bufferCount;
+                addLog(`Buffer settings: Size=${bufferSize}, Count=${bufferCount}`, 'info');
                 
                 // Use createScriptProcessor (deprecated but still needed for compatibility)
                 if (audioContext.createScriptProcessor) {
@@ -283,6 +289,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     // Start playback only when we have enough buffers
                     if (!isPlaying && audioBufferQueue.length >= minQueueSize) {
+                        addLog(`Starting playback with ${audioBufferQueue.length}/${minQueueSize} buffers`, 'info');
                         startContinuousPlayback();
                     }
                 } else {
