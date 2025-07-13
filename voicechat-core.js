@@ -150,21 +150,30 @@ export class VoiceChatCore extends EventEmitter {
 
     startAudio(socket = null) {
         try {
-            const deviceOptions = AudioDevices.getDeviceOptions(this.outputDeviceId);
-            const speakerOptions = { ...this.audioFormat, ...deviceOptions };
-            
-            this.speaker = new Speaker(speakerOptions);
-            
-            this.speaker.on('error', (err) => {
-                this.emit('error', `Speaker error: ${err.message}`);
-            });
+            try {
+                const deviceOptions = AudioDevices.getDeviceOptions(this.outputDeviceId);
+                const speakerOptions = { ...this.audioFormat, ...deviceOptions };
+                
+                this.speaker = new Speaker(speakerOptions);
+                
+                this.speaker.on('error', (err) => {
+                    this.emit('error', `Speaker error: ${err.message}`);
+                });
+            } catch (speakerErr) {
+                this.emit('error', `Speaker initialization failed: ${speakerErr.message}. Running without audio output.`);
+            }
 
-            this.recording = recorder.record({
-                sampleRate: this.audioFormat.sampleRate,
-                channels: this.audioFormat.channels,
-                audioType: 'raw',
-                recorder: process.platform === 'darwin' ? 'sox' : 'arecord'
-            });
+            try {
+                this.recording = recorder.record({
+                    sampleRate: this.audioFormat.sampleRate,
+                    channels: this.audioFormat.channels,
+                    audioType: 'raw',
+                    recorder: process.platform === 'darwin' ? 'sox' : 'arecord'
+                });
+            } catch (recordErr) {
+                this.emit('error', `Recording initialization failed: ${recordErr.message}. Running without microphone input.`);
+                return;
+            }
 
             const audioStream = this.recording.stream();
             
